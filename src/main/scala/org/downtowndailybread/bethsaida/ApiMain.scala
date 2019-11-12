@@ -1,20 +1,12 @@
 package org.downtowndailybread.bethsaida
 
-import akka.actor.{ActorSystem, Props}
+import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
 import akka.stream.ActorMaterializer
-import ch.megard.akka.http.cors.scaladsl.CorsDirectives.cors
 import com.typesafe.config.ConfigFactory
-import org.downtowndailybread.bethsaida.controller.ApplicationRoutes
-import org.downtowndailybread.bethsaida.json._
-import org.downtowndailybread.bethsaida.model.AnonymousUser
-import org.downtowndailybread.bethsaida.providers._
-import org.downtowndailybread.bethsaida.service.{ExceptionHandlers, RejectionHandlers}
-import org.downtowndailybread.bethsaida.worker.EventScheduler
 
-import scala.io.StdIn
 
 object ApiMain {
   def main(args: Array[String]): Unit = {
@@ -26,29 +18,11 @@ object ApiMain {
   }
 }
 
-class ApiMain(val settings: Settings)
-  extends JsonSupport
-    with ApplicationRoutes
-    with AuthenticationProvider
-    with SettingsProvider
-    with DatabaseConnectionProvider {
+class ApiMain(val settings: Settings) {
 
-  val anonymousUser = AnonymousUser
-
-  val routes = {
-    cors() {
-      pathPrefix(settings.prefix / settings.version) {
-        path("") {
-          complete(s"ddb api ${settings.version}")
-        } ~
-          allRoutes
-      }
-    }
+  val routes = path("") {
+    complete("success")
   }
-
-  implicit def exceptionHandler: ExceptionHandler = ExceptionHandlers.exceptionHandlers
-
-  implicit def rejectionHandler: RejectionHandler = RejectionHandler.newBuilder.handle(RejectionHandlers.rejectionHanders).result
 
   def run() = {
     implicit val system = ActorSystem("bethsaida-api")
@@ -56,15 +30,9 @@ class ApiMain(val settings: Settings)
     implicit val executionContext = system.dispatcher
 
     val workerSystem = ActorSystem("worker-api")
-    workerSystem.actorOf(Props(classOf[EventScheduler], settings), "event-scheduler")
-
 
     val bindingFuture = Http().bindAndHandle(Route.handlerFlow(routes), settings.interface, settings.port)
 
-    println(s"Server online at http://${settings.interface}:${settings.port}/\nPress RETURN to stop...")
-    StdIn.readLine() // let it run until user presses return
-    bindingFuture
-      .flatMap(_.unbind()) // trigger unbinding from the port
-      .onComplete(_ => system.terminate()) // and shutdown when done
+    println(s"Server online at http://${settings.interface}:${settings.port}/")
   }
 }
